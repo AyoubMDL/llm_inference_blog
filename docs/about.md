@@ -2,6 +2,7 @@
 hide:
   - navigation
   - toc
+comments: false
 ---
 
 # About Me

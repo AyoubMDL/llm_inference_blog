@@ -4,6 +4,7 @@ site_author: Ayoub
 
 theme:
   name: material
+  custom_dir: docs/overrides
   palette:
     # Light mode
     - scheme: default

@@ -2,6 +2,7 @@
 hide:
   - navigation
   - toc
+comments: false
 ---
 
 # Welcome to My AI in depth blog

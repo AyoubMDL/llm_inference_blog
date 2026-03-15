@@ -1,5 +1,6 @@
 ---
 date: 2026-03-15
+comments: true
 ---
 
 # AWQ: Activation-Aware Weight Quantization
