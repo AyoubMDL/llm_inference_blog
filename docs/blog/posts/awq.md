@@ -53,7 +53,7 @@ $$
 where the quantization function (this is a quantize→dequantize operation: weights are stored in low-bit format and then loaded and dequantized on the fly during inference) is:
 
 $$
-Q(\mathbf{w}) = \Delta \cdot \text{Round}\left(\frac{\mathbf{w}}{\Delta}\right), \quad \Delta = \frac{\max(|\mathbf{w}|)}{2^{N-1}}
+Q(\mathbf{w}) = \Delta \cdot \text{Round}\left(\frac{\mathbf{w}}{\Delta}\right), \quad \Delta = \frac{\max(|\mathbf{w}|)}{2^{N-1} - 1}
 $$
 
 Here $\Delta$ is the quantization scale factor (often noted $s$ in quantization literature, but we use $\Delta$ here to follow the paper's notation, reserving $s$ for AWQ's smoothing scale) and $N$ is the number of bits (e.g. 4-bits).
@@ -72,7 +72,7 @@ $$
 Q(w \cdot s) \cdot \frac{x}{s} = \Delta' \cdot \text{Round}\left(\frac{w \cdot s}{\Delta'}\right) \cdot \frac{x}{s}
 $$
 
-where $\Delta' = \frac{\max(|\mathbf{w} \cdot s|)}{2^{N-1}}$.
+where $\Delta' = \frac{\max(|\mathbf{w} \cdot s|)}{2^{N-1} - 1}$.
 
 #### Why Does This Help?
 
