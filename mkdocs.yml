@@ -1,4 +1,5 @@
 site_name: LLM Inference
+site_url: https://llm-inference.com/
 site_description: A blog about LLM inference, quantization, and other technical topics
 site_author: Ayoub
 
