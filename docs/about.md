@@ -12,10 +12,10 @@ Hi! I'm Ayoub, an ML Engineer passionate about making large language models more
 
 I focus on:
 
-- 🚀 **LLM Inference Optimization** - Making models run faster and more efficiently
-- 📊 **Quantization Techniques** - Reducing model size without sacrificing quality
-- 🔧 **ML Systems** - Building scalable infrastructure for ML workloads
-- 📝 **Technical Writing** - Sharing knowledge and insights with the community
+- **LLM Inference Optimization** - Making models run faster and more efficiently
+- **Quantization Techniques** - Reducing model size without sacrificing quality
+- **ML Systems** - Building scalable infrastructure for ML workloads
+- **Technical Writing** - Sharing knowledge and insights with the community
 
 ## Connect With Me
 
@@ -24,6 +24,6 @@ I focus on:
 
 ## Why This Blog?
 
-I started this blog to document my learnings and share practical insights about LLM inference, quantization, and other ML optimization techniques. The field is moving fast, and I believe in learning in public.
+I started this blog to document my learnings, share hands-on experience, and provide practical insights about LLM inference, quantization, and other ML optimization techniques. The field is moving fast, and I believe in learning in public.
 
 Feel free to reach out if you want to discuss anything related to ML optimization!

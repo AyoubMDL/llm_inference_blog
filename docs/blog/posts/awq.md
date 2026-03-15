@@ -1,5 +1,5 @@
 ---
-date: 2026-02-28
+date: 2026-03-15
 ---
 
 # AWQ: Activation-Aware Weight Quantization
@@ -8,7 +8,7 @@ AWQ is a weight-only quantization method (activations are kept in full precision
 
 <!-- more -->
 
-This post walks through the intuition, the math, and the tradeoffs behind AWQ. It assumes familiarity with quantization basics (many blogs exist such as [this](https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-quantization), I'll be publishing an in-depth post on it soon).
+This post walks through the intuition, the math, and the tradeoffs behind [AWQ](https://arxiv.org/abs/2306.00978). It assumes familiarity with quantization basics (many blogs exist such as [this](https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-quantization), I'll be publishing an in-depth post on it soon).
 
 ## Intuition
 
@@ -26,7 +26,10 @@ The authors verified this on OPT-6.7B with INT3 quantization (group size 128):
 
 But how do you find which weights are "salient"? Here is where the first non-obvious insight comes in: **you should look at the activations, not the weights**. Weight channels corresponding to larger activation magnitudes are more salient because they process more important features. Selecting the top 1% by weight magnitude alone performs no better than random selection.
 
-![Activation-based salient weight selection](assets/activation_based.png)
+<figure markdown="span">
+  ![Activation-based salient weight selection](assets/activation_based.png)
+  <figcaption>Activation-based salient weight selection (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
+</figure>
 
 ### The Problem with Mixed Precision
 
@@ -52,7 +55,7 @@ $$
 Q(\mathbf{w}) = \Delta \cdot \text{Round}\left(\frac{\mathbf{w}}{\Delta}\right), \quad \Delta = \frac{\max(|\mathbf{w}|)}{2^{N-1}}
 $$
 
-Here $\Delta$ is the quantization scale factor and $N$ is the number of bits (e.g. 4-bits).
+Here $\Delta$ is the quantization scale factor (often noted $s$ in quantization literature, but we use $\Delta$ here to follow the paper's notation, reserving $s$ for AWQ's smoothing scale) and $N$ is the number of bits (e.g. 4-bits).
 
 #### The Scaling Trick
 
@@ -100,7 +103,29 @@ Since $\Delta' \approx \Delta$ and $s > 1$, the quantization error for the salie
 
 That is the core trick. By scaling up a weight before quantization, you effectively give it more representation in the integer grid, reducing its relative rounding error. And by dividing the input by the same factor, you preserve the mathematical equivalence.
 
-#### Building Intuition: What Happens Concretely
+To see what "more representation in the integer grid" means, consider a weight $w = 0.15$ quantized to INT3 with $\Delta = 0.2667$:
+
+```
+Without scaling (w = 0.15):
+
+  0        w=0.15   0.2667       0.5333       0.8
+  |───────────┊────────|────────────|────────────|
+              ╰──────► rounds to 0.2667
+              error = 0.1167 (78% of w)
+
+With scaling s=2 (w·s = 0.30):
+
+  0          0.2667 w·s=0.30     0.5333       0.8
+  |─────────────|─────┊────────────|────────────|
+                ◄─────╯ rounds to 0.2667
+                error = 0.0333
+                after unscaling: 0.2667/2 = 0.1333
+                final error = 0.0167 (11% of w)
+```
+
+The grid spacing is fixed. A small weight barely reaches the nearest grid point, so rounding dominates. Scaling pushes it further along the grid, making the same rounding error proportionally smaller.
+
+#### Building Intuition
 
 Let us trace through a concrete example to see scaling in action. Suppose we have a group of weights and we are quantizing to INT3 ($2^3=8$ levels):
 
@@ -123,10 +148,10 @@ def quantize_dequantize(w):
     q = np.clip(q, -(2 ** (n_bits - 1) - 1), 2 ** (n_bits - 1) - 1)
     return q * delta, delta
 
-# --- Without scaling ---
+# Without scaling
 q_weights, delta = quantize_dequantize(weights)
-y_original = weights * x_values          # true output per channel
-y_quantized = q_weights * x_values       # quantized output per channel
+y_original = weights * x_values
+y_quantized = q_weights * x_values
 
 print("=== Without scaling ===")
 print(f"Delta: {delta:.4f}")
@@ -138,7 +163,7 @@ print(f"Output error      : {abs(y_original[salient_idx] - y_quantized[salient_i
 print(f"Total output error (sum over all channels): "
       f"{np.sum(np.abs(y_original - y_quantized)):.4f}")
 
-# --- With scaling (s=2 on the salient channel) ---
+# With scaling (s=2 on the salient channel)
 s = 2.0
 scaled_weights = weights.copy()
 scaled_weights[salient_idx] *= s
@@ -167,7 +192,7 @@ Quantized w[2] = 0.2667
 w * x  (original) : 0.5250
 w * x  (quantized): 0.9333
 Output error      : 0.4083
-Total output error (sum over all channels): 0.6650
+Total output error (sum over all channels): 0.5083
 
 === With scaling (s=2.0) ===
 Delta': 0.2667  (changed: False)
@@ -176,7 +201,7 @@ Quantized w[2] = 0.1333
 w * x  (original) : 0.5250
 w * x  (quantized): 0.4667
 Output error      : 0.0583
-Total output error (sum over all channels): 0.3150
+Total output error (sum over all channels): 0.1583
 ```
 
 Notice three things:
@@ -185,7 +210,7 @@ Notice three things:
 
 2. The output $w \cdot x$ on the salient channel went from an error of 0.4083 (the quantized output 0.9333 is almost double the true 0.5250) down to just 0.0583.
 
-3. The total output error across all channels also dropped from 0.6650 to 0.3150, so protecting the salient channel improved the overall layer output, not just one element.
+3. The total output error across all channels also dropped from 0.5083 to 0.1583, so protecting the salient channel improved the overall layer output, not just one element.
 
 #### The Tradeoff: What Happens to Non-Salient Weights
 
@@ -229,17 +254,17 @@ for s in [1.0, 1.25, 1.5, 2.0, 4.0, 8.0]:
 ```
 
 ```
-    s |    delta |  delta changed |  salient err | avg other err
+    s |    delta |  delta changed |  salient err |  avg other err
 -----------------------------------------------------------------
- 1.00 |   0.2667 |             No |       0.1167 |        0.0762
- 1.25 |   0.2667 |             No |       0.0917 |        0.0762
- 1.50 |   0.2667 |             No |       0.0667 |        0.0762
- 2.00 |   0.2667 |             No |       0.0167 |        0.0762
- 4.00 |   0.2667 |             No |       0.0083 |        0.0762
- 8.00 |   0.4000 |            Yes |       0.0500 |        0.1143
+ 1.00 |   0.2667 |             No |       0.1167 |         0.0619
+ 1.25 |   0.2667 |             No |       0.0633 |         0.0619
+ 1.50 |   0.2667 |             No |       0.0278 |         0.0619
+ 2.00 |   0.2667 |             No |       0.0167 |         0.0619
+ 4.00 |   0.2667 |             No |       0.0167 |         0.0619
+ 8.00 |   0.4000 |            Yes |       0.0000 |         0.1000
 ```
 
-At $s = 8$, the scaled weight (0.15 * 8 = 1.2) exceeds the original group maximum (0.8), so $\Delta'$ jumps from 0.2667 to 0.4. Every non-salient weight in the group now quantizes with a coarser step size, and their average error goes up. Worse, the salient weight error itself rebounds because $\Delta'/\Delta$ is no longer close to 1.
+At $s = 8$, the scaled weight (0.15 * 8 = 1.2) exceeds the original group maximum (0.8), so $\Delta'$ jumps from 0.2667 to 0.4. While the salient weight itself happens to land exactly on a grid point (error = 0), every non-salient weight in the group now quantizes with a coarser step size, and their average error jumps from 0.0619 to 0.1000.
 
 !!! note
     In the paper, the authors found that at $s = 2$, less than 5% of groups had a changed $\Delta$, and the best perplexity appeared at $s = 2$. At $s = 4$, the ratio $\Delta'/\Delta > 1$ for 21.2% of channels, which damages overall accuracy.
@@ -315,7 +340,10 @@ This distinction matters:
 
 This is what the paper means by **does not rely on any regression**: AWQ does not solve a per-weight optimization problem. It does not use backpropagation. The scaling factors are derived from a simple grid search using a forward-only objective. The result is a method that generalizes well across domains, works on instruction-tuned models, and even extends to multi-modal LMs without modification.
 
-![AWQ calibration robustness](assets/calibration_robust.png)
+<figure markdown="span">
+  ![AWQ calibration robustness](assets/calibration_robust.png)
+  <figcaption>AWQ calibration robustness across different data distributions (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
+</figure>
 
 ### Results
 
@@ -337,9 +365,12 @@ Notably, AWQ also generalizes to instruction-tuned models (Vicuna) and multi-mod
 
 ### Flow
 
-![AWQ pipeline flow](assets/awq_flow.png)
+<figure markdown="span">
+  ![AWQ pipeline flow](assets/awq_flow.png)
+  <figcaption>AWQ pipeline flow</figcaption>
+</figure>
 
-The full AWQ pipeline for a single linear layer works as follows:
+The full AWQ pipeline works as follows:
 
 1. **Collect activation statistics**: Run a small calibration set through the model and record the average per-channel activation magnitude $\mathbf{s_x}$.
 
