@@ -1,7 +1,7 @@
 ---
 date: 2026-03-15
 comments: true
-image: blog/assets/awq_flow.png
+image: blog/posts/assets/awq/awq_flow.png
 ---
 
 # AWQ: Activation-Aware Weight Quantization
@@ -29,7 +29,7 @@ The authors verified this on OPT-6.7B with INT3 quantization (group size 128):
 But how do you find which weights are "salient"? Here is where the first non-obvious insight comes in: **you should look at the activations, not the weights**. Weight channels corresponding to larger activation magnitudes are more salient because they process more important features. Selecting the top 1% by weight magnitude alone performs no better than random selection.
 
 <figure markdown="span">
-  ![Activation-based salient weight selection](assets/activation_based.png)
+  ![Activation-based salient weight selection](assets/awq/activation_based.png)
   <figcaption>Activation-based salient weight selection (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
 </figure>
 
@@ -343,7 +343,7 @@ This distinction matters:
 This is what the paper means by **does not rely on any regression**: AWQ does not solve a per-weight optimization problem. It does not use backpropagation. The scaling factors are derived from a simple grid search using a forward-only objective. The result is a method that generalizes well across domains, works on instruction-tuned models, and even extends to multi-modal LMs without modification.
 
 <figure markdown="span">
-  ![AWQ calibration robustness](assets/calibration_robust.png)
+  ![AWQ calibration robustness](assets/awq/calibration_robust.png)
   <figcaption>AWQ calibration robustness across different data distributions (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
 </figure>
 
@@ -368,7 +368,7 @@ Notably, AWQ also generalizes to instruction-tuned models (Vicuna) and multi-mod
 ### Flow
 
 <figure markdown="span">
-  ![AWQ pipeline flow](assets/awq_flow.png)
+  ![AWQ pipeline flow](assets/awq/awq_flow.png)
   <figcaption>AWQ pipeline flow</figcaption>
 </figure>
 
@@ -398,7 +398,7 @@ I have implemented AWQ from scratch in [onnx_quantize](https://github.com/AyoubM
 
 The core of the implementation is in [`awq.py`](https://github.com/AyoubMDL/onnx_quantize/blob/main/src/onnx_quantize/pre_passes/awq.py). A lot of open source projects implement AWQ (such as vllm llm-compressor). Here's an example of quantizing Mistral-7b model:
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AyoubMDL/llm_inference_blog/blob/main/docs/blog/posts/assets/awq_llm_compressor.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/AyoubMDL/llm_inference_blog/blob/main/docs/blog/posts/assets/awq/awq_llm_compressor.ipynb)
 
 ```python
 # Install compressed_tensors, llm-compressor, transformers
