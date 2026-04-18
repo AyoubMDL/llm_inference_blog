@@ -1,7 +1,8 @@
 ---
 date: 2026-04-18
 comments: true
-image: blog/posts/assets/raspi/smollm.png
+image: blog/assets/raspi/smollm.png
+social_title: SmolLM on a Smol Machine
 ---
 
 # SmolLM on a Smol Machine: Optimizing LLM Inference on a $15 Computer

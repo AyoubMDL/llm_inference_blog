@@ -1,7 +1,7 @@
 ---
 date: 2026-03-15
 comments: true
-image: blog/posts/assets/awq/awq_flow.png
+image: blog/assets/awq/awq_flow.png
 ---
 
 # AWQ: Activation-Aware Weight Quantization
