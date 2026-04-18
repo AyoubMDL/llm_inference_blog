@@ -1,0 +1,1099 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A blog about LLM inference, quantization, and other technical topics">
+      
+      
+        <meta name="author" content="Ayoub">
+      
+      
+        <link rel="canonical" href="https://llm-inference.com/blog/smollm-on-a-smol-machine-optimizing-llm-inference-on-a-15-computer/">
+      
+      
+        <link rel="prev" href="../awq-activation-aware-weight-quantization/">
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>SmolLM on a Smol Machine: Optimizing LLM Inference on a $15 Computer - LLM Inference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.e53b48f4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  
+    <meta property="og:image" content="https://llm-inference.com/blog/assets/raspi/smollm.png" />
+  
+  
+    <meta property="og:title" content="SmolLM on a Smol Machine" />
+    <meta name="twitter:title" content="SmolLM on a Smol Machine" />
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#smollm-on-a-smol-machine-optimizing-llm-inference-on-a-15-computer" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LLM Inference" class="md-header__button md-logo" aria-label="LLM Inference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LLM Inference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SmolLM on a Smol Machine: Optimizing LLM Inference on a $15 Computer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="dark-blue" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="../" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Blogs
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../about/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  About
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LLM Inference" class="md-nav__button md-logo" aria-label="LLM Inference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LLM Inference
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+    
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Blogs
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    About
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+  <div class="md-content md-content--post" data-md-component="content">
+    <div class="md-sidebar md-sidebar--post" data-md-component="sidebar" data-md-type="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner md-post">
+          <nav class="md-nav md-nav--primary">
+            <div class="md-post__back">
+              <div class="md-nav__title md-nav__container">
+                <a href="../" class="md-nav__link">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+                  <span class="md-ellipsis">
+                    Back to index
+                  </span>
+                </a>
+              </div>
+            </div>
+            
+            <ul class="md-post__meta md-nav__list">
+              <li class="md-nav__item md-nav__item--section">
+                <div class="md-post__title">
+                  <span class="md-ellipsis">
+                    Metadata
+                  </span>
+                </div>
+                <nav class="md-nav">
+                  <ul class="md-nav__list">
+                    <li class="md-nav__item">
+                      <div class="md-nav__link">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
+                        <time datetime="2026-04-18 00:00:00+00:00" class="md-ellipsis">Saturday, April 18, 2026</time>
+                      </div>
+                    </li>
+                    
+                    
+                    
+                      
+                      <li class="md-nav__item">
+                        <div class="md-nav__link">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
+                          <span class="md-ellipsis">
+                            
+                              10 min read
+                            
+                          </span>
+                        </div>
+                      </li>
+                    
+                  </ul>
+                </nav>
+              </li>
+            </ul>
+            
+          </nav>
+          
+            
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      The setup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-starting-point-why-format-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      The starting point: why format matters
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-optimizations-one-by-one" class="md-nav__link">
+    <span class="md-ellipsis">
+      The optimizations, one by one
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The optimizations, one by one">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-mmap-zero-copy-weight-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. mmap: zero-copy weight loading
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-gqa-grouped-query-attention" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. GQA: Grouped Query Attention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-kv-cache-on-inference-instead-of-on2" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. KV Cache: O(n) inference instead of O(n^2)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-parallel-matmul-use-all-cores" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Parallel matmul: use all cores
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-weight-quantization-from-f32-to-4-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Weight quantization: from f32 to 4-bit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-fused-dequantize-dot-product-no-temp-buffers" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Fused dequantize + dot product: no temp buffers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-neon-simd-vectorized-inner-loops" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. NEON SIMD: vectorized inner loops
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+          
+        </div>
+      </div>
+    </div>
+    <article class="md-content__inner md-typeset">
+      
+        
+  
+
+
+
+
+<h1 id="smollm-on-a-smol-machine-optimizing-llm-inference-on-a-15-computer">SmolLM on a Smol Machine: Optimizing LLM Inference on a $15 Computer<a class="headerlink" href="#smollm-on-a-smol-machine-optimizing-llm-inference-on-a-15-computer" title="Permanent link">&para;</a></h1>
+<p>I got SmolLM, a 360M-parameter LLM, running at <strong>2.6 tokens/sec on a $15 Raspberry Pi Zero 2W</strong>. The naive version ran at 0.015 tok/s, effectively unusable. This post breaks down exactly what made it <strong>~170x faster</strong>.</p>
+<p><img alt="SmolLM generating on a Raspberry Pi Zero 2W" src="../assets/raspi/raspi-demo.gif" /></p>
+<!-- more -->
+
+<p>Each technique here is used by production inference engines (llama.cpp, vLLM, TensorRT-LLM). Here, I'll be showing them one at a time so you can see what each one contributes. <a href="https://github.com/AyoubMDL/rust_llm">Check the code</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">Inspiration</p>
+<p>This project was inspired by <a href="https://github.com/RightNow-AI/picolm">picolm</a>.</p>
+</div>
+<hr />
+<p><strong>Prerequisites:</strong> familiarity with transformers at a high level (attention, FFN, embeddings). If you're new to them, <a href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Karpathy's "Let's build GPT from scratch"</a> is a great starting point. SmolLM is a standard decoder-only transformer (LLaMA-style); I'll only cover details that matter for performance.</p>
+<h2 id="the-setup">The setup<a class="headerlink" href="#the-setup" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>Engine:</strong> <a href="https://github.com/AyoubMDL/rust_llm">rustllm</a>. Supports any LLaMA-architecture model in safetensors or GGUF format (Q4_K, Q5_0, Q6_K, Q8_0; <strong>not all GGUF quantization types are supported</strong>).</p>
+</li>
+<li>
+<p><strong>Hardware:</strong> Raspberry Pi Zero 2W, 512 MB RAM, quad-core ARM Cortex-A53 at 1 GHz.</p>
+</li>
+<li>
+<p><strong>Model:</strong> SmolLM 360M (360 million parameters, 32 layers, 960 hidden dim, 15 query heads, 5 KV heads).</p>
+</li>
+</ul>
+<hr />
+<h2 id="the-starting-point-why-format-matters">The starting point: why format matters<a class="headerlink" href="#the-starting-point-why-format-matters" title="Permanent link">&para;</a></h2>
+<p>Here are the key fields from SmolLM 360M's <a href="https://huggingface.co/HuggingFaceTB/SmolLM-360M-Instruct/blob/main/config.json"><code>config.json</code></a> we'll reference throughout the post:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;hidden_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">960</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span><span class="nt">&quot;intermediate_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2560</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">&quot;num_attention_heads&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">15</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">&quot;num_key_value_heads&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="nt">&quot;num_hidden_layers&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">32</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">  </span><span class="nt">&quot;max_position_embeddings&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2048</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">  </span><span class="nt">&quot;vocab_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">49152</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">  </span><span class="nt">&quot;tie_word_embeddings&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Here's what SmolLM 360M looks like in three different weight formats on the Pi:</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Weight size</th>
+<th>Model size</th>
+<th>Fits in RAM?</th>
+<th>Generation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>f32 (safetensors)</td>
+<td>4 bytes</td>
+<td>~1.4 GB</td>
+<td>No</td>
+<td>0.015 tok/s</td>
+</tr>
+<tr>
+<td>bf16 (safetensors)</td>
+<td>2 bytes</td>
+<td>~720 MB</td>
+<td>No</td>
+<td>0.03 tok/s</td>
+</tr>
+<tr>
+<td>Q4_K_M (GGUF)</td>
+<td>~0.56 bytes</td>
+<td>~210 MB</td>
+<td>Yes</td>
+<td><strong>2.6 tok/s</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Two things stand out:</p>
+<ul>
+<li>
+<p><strong>bf16 is exactly 2x faster than f32.</strong> Half the bytes, double the speed. Both models exceed the Pi's 512 MB RAM, so every forward pass reads weights from the SD card via mmap. The Pi Zero 2W's SD card bus is limited to about <a href="https://forums.raspberrypi.com/viewtopic.php?t=232148">23 MB/s</a>, and bf16 reads half as many bytes. This proves that these runs are purely I/O bound.</p>
+</li>
+<li>
+<p><strong>GGUF is 87x faster than bf16.</strong> Two things stack to get there. First, 210 MB fits entirely in the Pi's RAM, so weights stream from LPDDR2 DRAM (~3.2 GB/s peak, 32-bit bus × 800 MT/s) instead of the SD card. That alone shifts the workload from I/O-bound to compute-bound. Second, <em>only because that shift happens</em> do the rest of the techniques in this post actually pay off: on the bf16 run, parallel matmul and NEON SIMD bought nothing because the cores were stalled on storage. Strip those optimizations from the Q4_K_M run and you'd be well below 1 tok/s, but nowhere near 2.6.</p>
+</li>
+</ul>
+<p>The 2.6 tok/s number includes every optimization in this post (KV cache, parallel matmul, fused dequantization, NEON SIMD). The sections below show what happens when you disable each one.</p>
+<p>For context: 2.6 tok/s is slow compared to a desktop CPU (~20-50 tok/s for similar-size models) or any GPU, but it's fast enough for interactive use with short prompts. On a $15 device with 512 MB of RAM, that's usable.</p>
+<hr />
+<h2 id="the-optimizations-one-by-one">The optimizations, one by one<a class="headerlink" href="#the-optimizations-one-by-one" title="Permanent link">&para;</a></h2>
+<h3 id="1-mmap-zero-copy-weight-loading">1. mmap: zero-copy weight loading<a class="headerlink" href="#1-mmap-zero-copy-weight-loading" title="Permanent link">&para;</a></h3>
+<p>mmap is what makes this possible on 512 MB.</p>
+<p><strong>The problem:</strong> Loading model weights normally means: allocate memory, read all bytes, parse. SmolLM f32 at 1.4 GB can't fit in 512 MB that way.</p>
+<p><strong>The fix:</strong> Memory-mapped I/O (<code>mmap</code>) maps the file into virtual address space without reading it. The OS loads pages on demand and evicts them under memory pressure. Weight bytes are used directly from the mmap'd region. No copying, no deserialization.</p>
+<p><strong>What actually lives in RAM (SmolLM 360M Q4_K_M on Pi Zero 2W):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Size</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Model weights (mmap'd)</td>
+<td>~210 MB</td>
+</tr>
+<tr>
+<td>KV cache (f32, 2048 context)</td>
+<td>~160 MB</td>
+</tr>
+<tr>
+<td>Activation buffers</td>
+<td>~0.5 MB</td>
+</tr>
+<tr>
+<td>Tokenizer</td>
+<td>~2 MB</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~373 MB</strong> (of 512 MB)</td>
+</tr>
+</tbody>
+</table>
+<p>The KV cache stores Keys and Values for every past token, across every layer:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>KV cache = max_seq_len × 2 (K and V) × n_layers × n_kv_heads × head_dim × 4 bytes
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>         = 2048        × 2            × 32       × 5           × 64       × 4
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>         = 160 MB
+</span></code></pre></div>
+<p>With GQA (see next section), SmolLM uses only 5 KV heads instead of 15 query heads. Without GQA this would be 480 MB, which wouldn't fit on the Pi at all. The cache could also be stored in lower precision (FP16, or even quantized) to halve or quarter the size, but this engine uses f32 for simplicity.</p>
+<hr />
+<h3 id="2-gqa-grouped-query-attention">2. GQA: Grouped Query Attention<a class="headerlink" href="#2-gqa-grouped-query-attention" title="Permanent link">&para;</a></h3>
+<p><strong>The problem:</strong> Standard multi-head attention gives every head its own K and V projections. SmolLM with 15 heads would need 15 K/V pairs per layer, expensive to compute and store.</p>
+<p><strong>The fix:</strong> GQA shares K/V heads across groups of query heads. SmolLM uses 15 query heads but only 5 KV heads, a 3:1 ratio. A more aggressive variant, Multi-Query Attention (MQA), uses a single KV head for all query heads, but at the cost of degraded output quality. GQA is a good middle ground:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>MHA (15 KV heads):  Q0→K0,V0  Q1→K1,V1  ...  Q14→K14,V14
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>GQA (5 KV heads):   Q0..Q2→K0,V0  Q3..Q5→K1,V1  ...  Q12..Q14→K4,V4
+</span></code></pre></div>
+<p>If you come from a computer vision background, the pattern is the same idea as <strong>grouped convolutions</strong>: instead of every output channel getting its own set of filter weights (standard convolution / MHA), groups of output channels share one filter (grouped conv / GQA). The extreme case, <strong>depthwise convolution</strong> (one filter per group), is the direct analog of Multi-Query Attention.</p>
+<p><strong>Impact:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>MHA (15 KV heads)</th>
+<th>GQA (5 KV heads)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KV cache (SmolLM, 2048 ctx, f32)</td>
+<td>~480 MB</td>
+<td>~160 MB</td>
+</tr>
+<tr>
+<td>KV projection compute per layer</td>
+<td>15 K + 15 V</td>
+<td>5 K + 5 V</td>
+</tr>
+</tbody>
+</table>
+<p>GQA is an architecture choice made during training, not a runtime optimization you apply. But understanding it explains why new architectures adopt it.</p>
+<hr />
+<h3 id="3-kv-cache-on-inference-instead-of-on2">3. KV Cache: O(n) inference instead of O(n^2)<a class="headerlink" href="#3-kv-cache-on-inference-instead-of-on2" title="Permanent link">&para;</a></h3>
+<p><strong>The problem:</strong> Without caching, generating the 100th token requires re-computing Keys and Values for all 100 previous tokens. The 101st token re-computes for 101 tokens. Cost grows quadratically with sequence length.</p>
+<p><strong>The fix:</strong> Keys and Values for past tokens never change (the model is causal, token 42 can't attend to token 43). Cache them. Each new token computes only its own K and V, appends to the cache, then attends over the full history. Without a KV cache, the model “re-reads the whole book” for every new word. With it, it just appends a new page.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Without cache:  token 100 → compute K,V for all 100 tokens → attend
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>With cache:     token 100 → compute K,V for token 100 only → append → attend
+</span></code></pre></div>
+<p>The cost is memory: for SmolLM 360M at 2048 context, the KV cache is ~160 MB in f32 (see section 1). On a Pi with 512 MB, that's ~31% of total RAM.</p>
+<p><strong>Impact on Pi Zero 2W (SmolLM 360M Q4_K_M):</strong></p>
+<p>All other optimizations (NEON SIMD, parallel matmul, fused dequant) are enabled in both rows. The only variable is the KV cache.</p>
+<table>
+<thead>
+<tr>
+<th>Config</th>
+<th>tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No KV cache (recompute everything)</td>
+<td>0.05</td>
+</tr>
+<tr>
+<td>With KV cache</td>
+<td>2.6</td>
+</tr>
+</tbody>
+</table>
+<p>Every production inference engine uses a KV cache. It's non-negotiable.</p>
+<hr />
+<h3 id="4-parallel-matmul-use-all-cores">4. Parallel matmul: use all cores<a class="headerlink" href="#4-parallel-matmul-use-all-cores" title="Permanent link">&para;</a></h3>
+<p><strong>The problem:</strong> Matrix-vector multiply is ~95% of inference time. SmolLM has 225 matmuls per forward pass (7 per layer × 32 layers + 1 lm_head). Each matmul computes thousands of independent dot products, but a single-threaded loop runs them one at a time.</p>
+<p><strong>The fix:</strong> Each output row is independent, so we parallelize across rows with rayon. No shared writes, no synchronization.</p>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1">// Single-threaded: one row at a time</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">out_rows</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dot</span><span class="p">(</span><span class="n">weight_row</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">x</span><span class="p">);</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">}</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1">// Parallel: each core takes a chunk of rows</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">out</span><span class="p">.</span><span class="n">par_iter_mut</span><span class="p">().</span><span class="n">enumerate</span><span class="p">().</span><span class="n">for_each</span><span class="p">(</span><span class="o">|</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">o</span><span class="p">)</span><span class="o">|</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="o">*</span><span class="n">o</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dot</span><span class="p">(</span><span class="n">weight_row</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="w"> </span><span class="n">x</span><span class="p">);</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">});</span>
+</span></code></pre></div>
+<p><strong>Impact on Pi Zero 2W (SmolLM 360M Q4_K_M):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Config</th>
+<th>tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 thread</td>
+<td>0.7</td>
+</tr>
+<tr>
+<td>4 threads</td>
+<td>2.6</td>
+</tr>
+</tbody>
+</table>
+<p>3.7x speedup from 4 cores. This works because with quantized weights and NEON SIMD, the workload is compute-bound, not memory-bound. The cores have enough work to stay busy.</p>
+<p>On memory-bound workloads (like f32 weights), multi-threading helps less. The 4 Cortex-A53 cores share a single L2 cache and a single bus to DRAM. As <a href="https://chipsandcheese.com/p/arms-cortex-a53-tiny-but-important">Chips and Cheese</a> puts it: "we're really limited by the memory setup rather than the cores."</p>
+<hr />
+<h3 id="5-weight-quantization-from-f32-to-4-bit">5. Weight quantization: from f32 to 4-bit<a class="headerlink" href="#5-weight-quantization-from-f32-to-4-bit" title="Permanent link">&para;</a></h3>
+<p>Quantization does two things:</p>
+<ol>
+<li>Makes the model fit in RAM</li>
+<li>Reduces memory bandwidth per token</li>
+</ol>
+<p><strong>The problem:</strong> f32 weights mean 4 bytes per parameter. SmolLM 360M in f32 is ~1.4 GB, which doesn't fit in the Pi's 512 MB RAM. Even bf16 (2 bytes, ~720 MB) doesn't fit. Every forward pass pages weights from the SD card.</p>
+<p><strong>The fix:</strong> Quantize weights to 4 bits (or less). The GGUF format (I'll write a separate post on the GGUF binary format) stores weights in blocks where each value is a 4-bit nibble plus per-block scale factors.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Q4_K block: 256 weights in 144 bytes (~4.5 bits/weight)
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>bytes [0..2]    d      : FP16 super-block scale
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>bytes [2..4]    dmin   : FP16 super-block minimum
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>bytes [4..16]   scales : 12 bytes, packed per-group scale+min
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>bytes [16..144] qs     : 128 bytes, 256 weights as 4-bit nibbles
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>Dequantize: weight = d * scale * nibble - dmin * min
+</span></code></pre></div>
+<p>Each byte stores two weights. Q4_K_M uses mixed precision, promoting sensitive layers to higher precision: Q5_0 for most attention and FFN tensors (~75%, see <a href="#7-neon-simd-vectorized-inner-loops">section 7</a>), and Q6_K or Q8_0 for the most sensitive ones.</p>
+<p><strong>Impact on Pi Zero 2W (SmolLM 360M):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Model size</th>
+<th>Fits in RAM?</th>
+<th>tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>f32</td>
+<td>~1.4 GB</td>
+<td>No</td>
+<td>0.015</td>
+</tr>
+<tr>
+<td>bf16</td>
+<td>~720 MB</td>
+<td>No</td>
+<td>0.03</td>
+</tr>
+<tr>
+<td>Q4_K_M</td>
+<td>~210 MB</td>
+<td>Yes</td>
+<td><strong>2.6</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The jump from bf16 to GGUF isn't just about fewer bits. It's about fitting in RAM. The bf16 vs f32 comparison (exactly 2x, half the bytes) proves the SD card is the bottleneck. Once quantized weights fit in memory, inference shifts from I/O-bound to compute-bound, and all the other optimizations (SIMD, parallelism) can actually help.</p>
+<p>On GPUs, where inference is more clearly memory-bound, quantization plays an even bigger role since the compute cost of dequantization is negligible compared to the memory bandwidth savings.</p>
+<hr />
+<h3 id="6-fused-dequantize-dot-product-no-temp-buffers">6. Fused dequantize + dot product: no temp buffers<a class="headerlink" href="#6-fused-dequantize-dot-product-no-temp-buffers" title="Permanent link">&para;</a></h3>
+<p><strong>The problem:</strong> The naive approach to quantized matmul is two-pass: first dequantize an entire weight row into a temporary buffer, then compute the dot product against the input vector. This means one heap allocation per row, one pass to decode all weights, and a second pass to multiply-accumulate.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Naive (two-pass):
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>  1. allocate temp buffer
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>  2. dequantize entire row → temp buffer     ← pass 1: read quantized, write f32
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>  3. dot(temp buffer, input)                 ← pass 2: read f32, multiply-accumulate
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  4. free temp buffer
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>Fused (single-pass):
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  for each block in row:
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>    decode block → multiply with input → accumulate
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>  no allocation, no temp buffer
+</span></code></pre></div>
+<p><strong>The fix:</strong> Fuse dequantization and accumulation into a single pass. Each quantized block is decoded and immediately multiplied with the input. No temporary buffer, no second pass. This eliminates the heap allocation and halves the memory traffic, since decoded weights are never written to memory and read back.</p>
+<p>This matters because matmul is ~95% of inference time. Eliminating the allocation and the extra memory pass reduces both latency and cache pressure. The same principle applies on GPUs: dequantizing separately means writing decoded weights back to VRAM and then reading them again for the dot product. Fusion eliminates that round-trip entirely.</p>
+<hr />
+<h3 id="7-neon-simd-vectorized-inner-loops">7. NEON SIMD: vectorized inner loops<a class="headerlink" href="#7-neon-simd-vectorized-inner-loops" title="Permanent link">&para;</a></h3>
+<p><strong>The problem:</strong> The Cortex-A53 can process 4 single-precision floats per cycle with NEON (128-bit SIMD), running at 1 GHz. The scalar matmul inner loop, one multiply-add per iteration, uses only a fraction of that throughput.</p>
+<p><strong>The fix:</strong> ARM NEON processes 4 floats simultaneously using 128-bit registers:</p>
+<div class="language-rust highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1">// Scalar: 1 multiply-add per iteration</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="k">for</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="mi">0</span><span class="o">..</span><span class="n">n</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="n">sum</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="p">}</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="c1">// NEON: 4 multiply-adds per iteration</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="kd">let</span><span class="w"> </span><span class="k">mut</span><span class="w"> </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vdupq_n_f32</span><span class="p">(</span><span class="mf">0.0</span><span class="p">);</span><span class="w">         </span><span class="c1">// [0, 0, 0, 0]</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="k">while</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">4</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">va</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vld1q_f32</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">ptr</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">       </span><span class="c1">// load 4 floats</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="n">vb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vld1q_f32</span><span class="p">(</span><span class="n">b</span><span class="p">.</span><span class="n">ptr</span><span class="p">(</span><span class="n">i</span><span class="p">));</span><span class="w">       </span><span class="c1">// load 4 floats</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="n">acc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vmlaq_f32</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span><span class="w"> </span><span class="n">va</span><span class="p">,</span><span class="w"> </span><span class="n">vb</span><span class="p">);</span><span class="w">       </span><span class="c1">// acc += a * b (4-wide)</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">    </span><span class="n">i</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">}</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="kd">let</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vaddvq_f32</span><span class="p">(</span><span class="n">acc</span><span class="p">);</span><span class="w">              </span><span class="c1">// sum all 4 lanes</span>
+</span></code></pre></div>
+<p>For quantized weights, the NEON path is more involved. Q4_K stores two 4-bit weights per byte. The inner loop loads 8 bytes (16 weights), extracts nibbles with bitwise ops, widens through <code>u8 → u16 → u32 → f32</code>, then multiply-accumulates, all without materializing a temporary buffer.</p>
+<p>The NEON kernels use the fused approach from <a href="#6-fused-dequantize-dot-product-no-temp-buffers">section 6</a>: dequantize and accumulate in a single pass, no allocation, no temp buffer, each value used immediately.</p>
+<p>For SmolLM 360M Q4_K_M, 75% of weight tensors are Q5_0 format. Before adding a dedicated NEON <a href="https://github.com/AyoubMDL/rust_llm/blob/2d9048474bd3a6836465060b4ae8312841f642c7/src/components/simd.rs#L275">vec_dot_q5_0</a>, those went through the slow fallback (allocate, dequantize, scalar dot). The dedicated kernel was the single biggest speedup of the project.</p>
+<p><strong>Impact on Pi Zero 2W (SmolLM 360M Q4_K_M):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Config</th>
+<th>tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Scalar fallback (alloc + dequant + scalar dot)</td>
+<td>0.5</td>
+</tr>
+<tr>
+<td>NEON fused vec_dot</td>
+<td><strong>2.6</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">&para;</a></h2>
+<p>Every optimization in this post targets the same bottleneck from a different angle: reduce bytes moved per token. Quantization shrinks the weights. mmap avoids copying them. Fused kernels avoid writing intermediate results. SIMD processes more values per cycle.</p>
+<p>Here's the impact of each one in isolation (disabling it while keeping everything else on):</p>
+<table>
+<thead>
+<tr>
+<th>Optimization disabled</th>
+<th>tok/s</th>
+<th>vs full (2.6)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No KV cache</td>
+<td>0.05</td>
+<td>52x slower</td>
+</tr>
+<tr>
+<td>No SIMD (scalar fallback)</td>
+<td>0.5</td>
+<td>5.2x slower</td>
+</tr>
+<tr>
+<td>No parallelism (1 thread)</td>
+<td>0.7</td>
+<td>3.7x slower</td>
+</tr>
+<tr>
+<td><strong>All optimizations on</strong></td>
+<td><strong>2.6</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>And the format progression that got the model into RAM in the first place:</p>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Fits in RAM?</th>
+<th>tok/s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>f32 (1.4 GB)</td>
+<td>No</td>
+<td>0.015</td>
+</tr>
+<tr>
+<td>bf16 (720 MB)</td>
+<td>No</td>
+<td>0.03</td>
+</tr>
+<tr>
+<td>Q4_K_M (210 MB)</td>
+<td>Yes</td>
+<td><strong>2.6</strong></td>
+</tr>
+</tbody>
+</table>
+<p>That's the end. There's a lot here (KV caching, quantization, SIMD, fused kernels) and each one is a rabbit hole on its own. The post compresses weeks of work into a few minutes of reading, but the techniques themselves don't compress the same way. If anything caught your eye, my suggestion is to pick one, ignore the rest, and go deep: read how <a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> implements it, profile it on your own hardware, try to break it and see what changes. That's where the real understanding comes from.</p>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/AyoubMDL/rust_llm">rust_llm</a> - the inference engine used throughout this post</li>
+<li><a href="https://github.com/ggerganov/llama.cpp">llama.cpp</a> - the canonical reference for GGUF and CPU LLM inference</li>
+<li><a href="https://github.com/rasbt/LLMs-from-scratch">LLMs-from-scratch</a> - Sebastian Raschka, walkthrough of LLM architectures from the ground up</li>
+<li><a href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Let's build GPT: from scratch, in code, spelled out</a> - Andrej Karpathy</li>
+<li><a href="https://arxiv.org/abs/2305.13245">GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</a> - Ainslie et al., 2023</li>
+<li><a href="https://huggingface.co/HuggingFaceTB/SmolLM-360M-Instruct">SmolLM 360M Instruct</a> - HuggingFace, the model used in this post</li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+  
+
+
+
+<h2 id="__comments">Comments</h2>
+
+<script src="https://giscus.app/client.js"
+        data-repo="AyoubMDL/llm_inference_blog"
+        data-repo-id="R_kgDORmARPg"
+        data-category="Q&A"
+        data-category-id="DIC_kwDORmARPs4C4cC4"
+        data-mapping="pathname"
+        data-strict="1"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="bottom"
+        data-theme="preferred_color_scheme"
+        data-lang="en"
+        data-loading="lazy"
+        crossorigin="anonymous"
+        async>
+</script>
+
+      
+    </article>
+  </div>
+
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/AyoubMDL" target="_blank" rel="noopener" title="GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://www.linkedin.com/in/ayoub-bih/" target="_blank" rel="noopener" title="LinkedIn" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3M135.4 416H69V202.2h66.5V416zM102.2 96a38.5 38.5 0 1 1 0 77 38.5 38.5 0 1 1 0-77m282.1 320h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "toc.integrate"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="../../javascripts/external-links.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

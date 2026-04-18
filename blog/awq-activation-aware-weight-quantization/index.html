@@ -1,0 +1,1177 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A blog about LLM inference, quantization, and other technical topics">
+      
+      
+        <meta name="author" content="Ayoub">
+      
+      
+        <link rel="canonical" href="https://llm-inference.com/blog/awq-activation-aware-weight-quantization/">
+      
+      
+      
+        <link rel="next" href="../smollm-on-a-smol-machine-optimizing-llm-inference-on-a-15-computer/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.20">
+    
+    
+      
+        <title>AWQ: Activation-Aware Weight Quantization - LLM Inference</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.e53b48f4.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  
+    <meta property="og:image" content="https://llm-inference.com/blog/assets/awq/awq_flow.png" />
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#awq-activation-aware-weight-quantization" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LLM Inference" class="md-header__button md-logo" aria-label="LLM Inference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LLM Inference
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              AWQ: Activation-Aware Weight Quantization
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="blue" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="dark-blue" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="../" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Blogs
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../about/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  About
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+                
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LLM Inference" class="md-nav__button md-logo" aria-label="LLM Inference" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    LLM Inference
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+    
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Blogs
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../about/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    About
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+  <div class="md-content md-content--post" data-md-component="content">
+    <div class="md-sidebar md-sidebar--post" data-md-component="sidebar" data-md-type="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner md-post">
+          <nav class="md-nav md-nav--primary">
+            <div class="md-post__back">
+              <div class="md-nav__title md-nav__container">
+                <a href="../" class="md-nav__link">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+                  <span class="md-ellipsis">
+                    Back to index
+                  </span>
+                </a>
+              </div>
+            </div>
+            
+            <ul class="md-post__meta md-nav__list">
+              <li class="md-nav__item md-nav__item--section">
+                <div class="md-post__title">
+                  <span class="md-ellipsis">
+                    Metadata
+                  </span>
+                </div>
+                <nav class="md-nav">
+                  <ul class="md-nav__list">
+                    <li class="md-nav__item">
+                      <div class="md-nav__link">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
+                        <time datetime="2026-03-15 00:00:00+00:00" class="md-ellipsis">Sunday, March 15, 2026</time>
+                      </div>
+                    </li>
+                    
+                    
+                    
+                      
+                      <li class="md-nav__item">
+                        <div class="md-nav__link">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
+                          <span class="md-ellipsis">
+                            
+                              13 min read
+                            
+                          </span>
+                        </div>
+                      </li>
+                    
+                  </ul>
+                </nav>
+              </li>
+            </ul>
+            
+          </nav>
+          
+            
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#intuition" class="md-nav__link">
+    <span class="md-ellipsis">
+      Intuition
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Intuition">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-core-observation-salient-weights" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Core Observation: Salient Weights
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-problem-with-mixed-precision" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Problem with Mixed Precision
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#theory" class="md-nav__link">
+    <span class="md-ellipsis">
+      Theory
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Theory">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setting-up-the-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting Up the Problem
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#searching-for-the-optimal-scale" class="md-nav__link">
+    <span class="md-ellipsis">
+      Searching for the Optimal Scale
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#weight-clipping" class="md-nav__link">
+    <span class="md-ellipsis">
+      Weight Clipping
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-awq-does-not-overfit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why AWQ Does Not Overfit
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#results" class="md-nav__link">
+    <span class="md-ellipsis">
+      Results
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Implementation
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Flow
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#code" class="md-nav__link">
+    <span class="md-ellipsis">
+      Code
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+          
+        </div>
+      </div>
+    </div>
+    <article class="md-content__inner md-typeset">
+      
+        
+  
+
+
+
+
+<h1 id="awq-activation-aware-weight-quantization">AWQ: Activation-Aware Weight Quantization<a class="headerlink" href="#awq-activation-aware-weight-quantization" title="Permanent link">&para;</a></h1>
+<p>AWQ is a weight-only quantization method (activations are kept in full precision because they serve as the "budget" traded away to protect salient weights — quantizing them too would undermine the very scaling trick that makes AWQ work) that achieves strong results through a surprisingly simple insight: <strong>not all weights matter equally, and the ones that do can be identified by looking at activations, not weights.</strong></p>
+<!-- more -->
+
+<p>This post walks through the intuition, the math, and the tradeoffs behind <a href="https://arxiv.org/abs/2306.00978">AWQ</a>. It assumes familiarity with quantization basics (many blogs exist such as <a href="https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-quantization">this</a>, I'll be publishing an in-depth post on it soon).</p>
+<h2 id="intuition">Intuition<a class="headerlink" href="#intuition" title="Permanent link">&para;</a></h2>
+<h3 id="the-core-observation-salient-weights">The Core Observation: Salient Weights<a class="headerlink" href="#the-core-observation-salient-weights" title="Permanent link">&para;</a></h3>
+<p>The starting point of AWQ is an empirical finding: a tiny fraction of weights (<strong>around 0.1%-1%</strong>) are disproportionately important for model quality. If you keep just those weights in FP16 and quantize everything else, perplexity barely moves.</p>
+<p>The authors verified this on OPT-6.7B with INT3 quantization (group size 128):</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Perplexity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16 baseline</td>
+<td>10.86</td>
+</tr>
+<tr>
+<td>RTN (full quantization)</td>
+<td>23.54</td>
+</tr>
+<tr>
+<td>RTN + 1% salient weights in FP16 (activation-based)</td>
+<td>11.39</td>
+</tr>
+</tbody>
+</table>
+<p>But how do you find which weights are "salient"? Here is where the first non-obvious insight comes in: <strong>you should look at the activations, not the weights</strong>. Weight channels corresponding to larger activation magnitudes are more salient because they process more important features. Selecting the top 1% by weight magnitude alone performs no better than random selection.</p>
+<figure>
+  <img alt="Activation-based salient weight selection" src="../assets/awq/activation_based.png" />
+<br />
+<figcaption>Activation-based salient weight selection (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
+</figure>
+<h3 id="the-problem-with-mixed-precision">The Problem with Mixed Precision<a class="headerlink" href="#the-problem-with-mixed-precision" title="Permanent link">&para;</a></h3>
+<p>Keeping salient weights in FP16 works in theory, but it is terrible in practice. Mixed-precision formats (some channels in FP16, others in INT4) break hardware assumptions. GPUs and CPUs are designed to process uniform data types efficiently. Mixing precisions within a single matrix multiply means you cannot use optimized GEMM kernels, SIMD instructions, or tensor cores effectively.</p>
+<p>So the question becomes: <strong>can we protect salient weights without actually keeping them in higher precision?</strong>
+AWQ's answer is yes, through per-channel scaling.</p>
+<h2 id="theory">Theory<a class="headerlink" href="#theory" title="Permanent link">&para;</a></h2>
+<h3 id="setting-up-the-problem">Setting Up the Problem<a class="headerlink" href="#setting-up-the-problem" title="Permanent link">&para;</a></h3>
+<p>Consider a linear layer <span class="arithmatex">\(y = \mathbf{w}\mathbf{x}\)</span>. Under weight-only quantization, we get:</p>
+<div class="arithmatex">\[
+\hat{y} = Q(\mathbf{w}) \cdot \mathbf{x}
+\]</div>
+<p>where the quantization function (this is a quantize→dequantize operation: weights are stored in low-bit format and then loaded and dequantized on the fly during inference) is:</p>
+<div class="arithmatex">\[
+Q(\mathbf{w}) = \Delta \cdot \text{Round}\left(\frac{\mathbf{w}}{\Delta}\right), \quad \Delta = \frac{\max(|\mathbf{w}|)}{2^{N-1} - 1}
+\]</div>
+<p>Here <span class="arithmatex">\(\Delta\)</span> is the quantization scale factor (often noted <span class="arithmatex">\(s\)</span> in quantization literature, but we use <span class="arithmatex">\(\Delta\)</span> here to follow the paper's notation, reserving <span class="arithmatex">\(s\)</span> for AWQ's smoothing scale) and <span class="arithmatex">\(N\)</span> is the number of bits (e.g. 4-bits).</p>
+<h4 id="the-scaling-trick">The Scaling Trick<a class="headerlink" href="#the-scaling-trick" title="Permanent link">&para;</a></h4>
+<p>Now, suppose we multiply a weight element <span class="arithmatex">\(w\)</span> by a scaling factor <span class="arithmatex">\(s &gt; 1\)</span> before quantization, and divide the corresponding input <span class="arithmatex">\(x\)</span> by <span class="arithmatex">\(s\)</span> to compensate:</p>
+<div class="arithmatex">\[
+\hat{y} = Q(w \cdot s) \cdot \frac{x}{s}
+\]</div>
+<p>Expanding this:</p>
+<div class="arithmatex">\[
+Q(w \cdot s) \cdot \frac{x}{s} = \Delta' \cdot \text{Round}\left(\frac{w \cdot s}{\Delta'}\right) \cdot \frac{x}{s}
+\]</div>
+<p>where <span class="arithmatex">\(\Delta' = \frac{\max(|\mathbf{w} \cdot s|)}{2^{N-1} - 1}\)</span>.</p>
+<h4 id="why-does-this-help">Why Does This Help?<a class="headerlink" href="#why-does-this-help" title="Permanent link">&para;</a></h4>
+<p>To understand why this reduces error, the paper makes three empirical observations:</p>
+<p><strong>1. Rounding error is roughly constant.</strong> The expected error from <code>Round(.)</code> does not change regardless of the input value. Since rounding maps a float to the nearest integer, the error is approximately uniformly distributed on <span class="arithmatex">\([0, 0.5]\)</span>, giving an expected rounding error of about 0.25.</p>
+<p><strong>2. Scaling one element rarely changes the group maximum.</strong> When you scale up a single weight element <span class="arithmatex">\(w\)</span> within a group, the maximum value of the group (which determines <span class="arithmatex">\(\Delta\)</span>) usually does not change. So <span class="arithmatex">\(\Delta' \approx \Delta\)</span>.</p>
+<p><strong>3. The scale and input are in FP16.</strong> Both <span class="arithmatex">\(\Delta\)</span> and <span class="arithmatex">\(x\)</span> are represented in FP16, so dividing by <span class="arithmatex">\(s\)</span> introduces no quantization error.</p>
+<p>Given these observations, we can write the quantization errors:</p>
+<div class="arithmatex">\[
+\text{Err}(Q(w) \cdot x) = \Delta \cdot \text{RoundErr}\left(\frac{w}{\Delta}\right) \cdot x
+\]</div>
+<div class="arithmatex">\[
+\text{Err}\left(Q(w \cdot s) \cdot \frac{x}{s}\right) = \Delta' \cdot \text{RoundErr}\left(\frac{w \cdot s}{\Delta'}\right) \cdot \frac{x}{s}
+\]</div>
+<p>The ratio of the new error to the original is:</p>
+<div class="arithmatex">\[
+\frac{\text{Err (scaled)}}{\text{Err (original)}} = \frac{\Delta'}{\Delta} \cdot \frac{1}{s} \approx \frac{1}{s} &lt; 1
+\]</div>
+<p>Since <span class="arithmatex">\(\Delta' \approx \Delta\)</span> and <span class="arithmatex">\(s &gt; 1\)</span>, the quantization error for the salient weight <span class="arithmatex">\(w\)</span> is reduced by a factor of <span class="arithmatex">\(s\)</span>.</p>
+<p>That is the core trick. By scaling up a weight before quantization, you effectively give it more representation in the integer grid, reducing its relative rounding error. And by dividing the input by the same factor, you preserve the mathematical equivalence.</p>
+<p>To see what "more representation in the integer grid" means, consider a weight <span class="arithmatex">\(w = 0.15\)</span> quantized to INT3 with <span class="arithmatex">\(\Delta = 0.2667\)</span>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Without scaling (w = 0.15):
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>  0        w=0.15   0.2667       0.5333       0.8
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>  |───────────┊────────|────────────|────────────|
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>              ╰──────► rounds to 0.2667
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>              error = 0.1167 (78% of w)
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>With scaling s=2 (w·s = 0.30):
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  0          0.2667 w·s=0.30     0.5333       0.8
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>  |─────────────|─────┊────────────|────────────|
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>                ◄─────╯ rounds to 0.2667
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>                error = 0.0333
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>                after unscaling: 0.2667/2 = 0.1333
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>                final error = 0.0167 (11% of w)
+</span></code></pre></div>
+<p>The grid spacing is fixed. A small weight barely reaches the nearest grid point, so rounding dominates. Scaling pushes it further along the grid, making the same rounding error proportionally smaller.</p>
+<h4 id="building-intuition">Building Intuition<a class="headerlink" href="#building-intuition" title="Permanent link">&para;</a></h4>
+<p>Let us trace through a concrete example to see scaling in action. Suppose we have a group of weights and we are quantizing to INT3 (<span class="arithmatex">\(2^3=8\)</span> levels):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># A group of 8 weights, one of which is &quot;salient&quot; (index 2)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">])</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">salient_idx</span> <span class="o">=</span> <span class="mi">2</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">x_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">])</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">n_bits</span> <span class="o">=</span> <span class="mi">3</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">def</span><span class="w"> </span><span class="nf">quantize_dequantize</span><span class="p">(</span><span class="n">w</span><span class="p">):</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Fake quantize: quantize then dequantize.&quot;&quot;&quot;</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">delta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">w</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">w</span> <span class="o">/</span> <span class="n">delta</span><span class="p">)</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="o">-</span><span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">return</span> <span class="n">q</span> <span class="o">*</span> <span class="n">delta</span><span class="p">,</span> <span class="n">delta</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="c1"># Without scaling</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="n">q_weights</span><span class="p">,</span> <span class="n">delta</span> <span class="o">=</span> <span class="n">quantize_dequantize</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="n">y_original</span> <span class="o">=</span> <span class="n">weights</span> <span class="o">*</span> <span class="n">x_values</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="n">y_quantized</span> <span class="o">=</span> <span class="n">q_weights</span> <span class="o">*</span> <span class="n">x_values</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=== Without scaling ===&quot;</span><span class="p">)</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Delta: </span><span class="si">{</span><span class="n">delta</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original  w[</span><span class="si">{</span><span class="n">salient_idx</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">weights</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Quantized w[</span><span class="si">{</span><span class="n">salient_idx</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">q_weights</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;w * x  (original) : </span><span class="si">{</span><span class="n">y_original</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;w * x  (quantized): </span><span class="si">{</span><span class="n">y_quantized</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output error      : </span><span class="si">{</span><span class="nb">abs</span><span class="p">(</span><span class="n">y_original</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_quantized</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">])</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total output error (sum over all channels): &quot;</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>      <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y_original</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_quantized</span><span class="p">))</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a><span class="c1"># With scaling (s=2 on the salient channel)</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a><span class="n">s</span> <span class="o">=</span> <span class="mf">2.0</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a><span class="n">scaled_weights</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="n">scaled_weights</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span> <span class="o">*=</span> <span class="n">s</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a><span class="n">q_scaled</span><span class="p">,</span> <span class="n">delta_prime</span> <span class="o">=</span> <span class="n">quantize_dequantize</span><span class="p">(</span><span class="n">scaled_weights</span><span class="p">)</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="c1"># Undo scaling: divide quantized weight by s (equivalent to dividing input by s)</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a><span class="n">q_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span> <span class="o">/=</span> <span class="n">s</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="n">y_scaled</span> <span class="o">=</span> <span class="n">q_scaled</span> <span class="o">*</span> <span class="n">x_values</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">=== With scaling (s=</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">) ===&quot;</span><span class="p">)</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Delta&#39;: </span><span class="si">{</span><span class="n">delta_prime</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">  (changed: </span><span class="si">{</span><span class="ow">not</span><span class="w"> </span><span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">delta</span><span class="p">,</span><span class="w"> </span><span class="n">delta_prime</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Original  w[</span><span class="si">{</span><span class="n">salient_idx</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">weights</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Quantized w[</span><span class="si">{</span><span class="n">salient_idx</span><span class="si">}</span><span class="s2">] = </span><span class="si">{</span><span class="n">q_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;w * x  (original) : </span><span class="si">{</span><span class="n">y_original</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;w * x  (quantized): </span><span class="si">{</span><span class="n">y_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Output error      : </span><span class="si">{</span><span class="nb">abs</span><span class="p">(</span><span class="n">y_original</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">])</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Total output error (sum over all channels): &quot;</span>
+</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>      <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">y_original</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">y_scaled</span><span class="p">))</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>=== Without scaling ===
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Delta: 0.2667
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>Original  w[2] = 0.1500
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>Quantized w[2] = 0.2667
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>w * x  (original) : 0.5250
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>w * x  (quantized): 0.9333
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>Output error      : 0.4083
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>Total output error (sum over all channels): 0.5083
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>=== With scaling (s=2.0) ===
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>Delta&#39;: 0.2667  (changed: False)
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>Original  w[2] = 0.1500
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>Quantized w[2] = 0.1333
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>w * x  (original) : 0.5250
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>w * x  (quantized): 0.4667
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>Output error      : 0.0583
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>Total output error (sum over all channels): 0.1583
+</span></code></pre></div>
+<p>Notice three things:</p>
+<ol>
+<li>
+<p><span class="arithmatex">\(\Delta' = \Delta\)</span> because scaling one small weight did not change the group maximum.</p>
+</li>
+<li>
+<p>The output <span class="arithmatex">\(w \cdot x\)</span> on the salient channel went from an error of 0.4083 (the quantized output 0.9333 is almost double the true 0.5250) down to just 0.0583.</p>
+</li>
+<li>
+<p>The total output error across all channels also dropped from 0.5083 to 0.1583, so protecting the salient channel improved the overall layer output, not just one element.</p>
+</li>
+</ol>
+<h4 id="the-tradeoff-what-happens-to-non-salient-weights">The Tradeoff: What Happens to Non-Salient Weights<a class="headerlink" href="#the-tradeoff-what-happens-to-non-salient-weights" title="Permanent link">&para;</a></h4>
+<p>Scaling is not free. When <span class="arithmatex">\(s\)</span> gets too large, <span class="arithmatex">\(\Delta'\)</span> starts to increase (because the scaled weight eventually becomes the new group maximum), and this hurts the non-salient channels.</p>
+<p>Let us see this in practice:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">weights</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.15</span><span class="p">,</span> <span class="mf">0.8</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.6</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.7</span><span class="p">])</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">salient_idx</span> <span class="o">=</span> <span class="mi">2</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">n_bits</span> <span class="o">=</span> <span class="mi">3</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">def</span><span class="w"> </span><span class="nf">quantize_dequantize</span><span class="p">(</span><span class="n">w</span><span class="p">):</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">delta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">w</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">w</span> <span class="o">/</span> <span class="n">delta</span><span class="p">)</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">q</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="o">-</span><span class="p">(</span><span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">),</span> <span class="mi">2</span> <span class="o">**</span> <span class="p">(</span><span class="n">n_bits</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="k">return</span> <span class="n">q</span> <span class="o">*</span> <span class="n">delta</span><span class="p">,</span> <span class="n">delta</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;s&#39;</span><span class="si">:</span><span class="s2">&gt;5</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="s1">&#39;delta&#39;</span><span class="si">:</span><span class="s2">&gt;8</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="s1">&#39;delta changed&#39;</span><span class="si">:</span><span class="s2">&gt;14</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="s1">&#39;salient err&#39;</span><span class="si">:</span><span class="s2">&gt;12</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="s1">&#39;avg other err&#39;</span><span class="si">:</span><span class="s2">&gt;14</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">65</span><span class="p">)</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">1.25</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]:</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="n">scaled</span> <span class="o">=</span> <span class="n">weights</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>    <span class="n">scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span> <span class="o">*=</span> <span class="n">s</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>    <span class="n">q_scaled</span><span class="p">,</span> <span class="n">delta_prime</span> <span class="o">=</span> <span class="n">quantize_dequantize</span><span class="p">(</span><span class="n">scaled</span><span class="p">)</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="c1"># Unscale the salient weight</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="n">q_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span> <span class="o">/=</span> <span class="n">s</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="n">salient_err</span> <span class="o">=</span> <span class="nb">abs</span><span class="p">(</span><span class="n">weights</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">q_scaled</span><span class="p">[</span><span class="n">salient_idx</span><span class="p">])</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>    <span class="n">other_errs</span> <span class="o">=</span> <span class="p">[</span><span class="nb">abs</span><span class="p">(</span><span class="n">weights</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">q_scaled</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">weights</span><span class="p">))</span> <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">salient_idx</span><span class="p">]</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>    <span class="n">avg_other</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">other_errs</span><span class="p">)</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="n">_</span><span class="p">,</span> <span class="n">delta_orig</span> <span class="o">=</span> <span class="n">quantize_dequantize</span><span class="p">(</span><span class="n">weights</span><span class="p">)</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>    <span class="n">changed</span> <span class="o">=</span> <span class="s2">&quot;Yes&quot;</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">delta_orig</span><span class="p">,</span> <span class="n">delta_prime</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;No&quot;</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">s</span><span class="si">:</span><span class="s2">5.2f</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">delta_prime</span><span class="si">:</span><span class="s2">8.4f</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">changed</span><span class="si">:</span><span class="s2">&gt;14</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">salient_err</span><span class="si">:</span><span class="s2">12.4f</span><span class="si">}</span><span class="s2"> | </span><span class="si">{</span><span class="n">avg_other</span><span class="si">:</span><span class="s2">14.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>    s |    delta |  delta changed |  salient err |  avg other err
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>-----------------------------------------------------------------
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a> 1.00 |   0.2667 |             No |       0.1167 |         0.0619
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a> 1.25 |   0.2667 |             No |       0.0633 |         0.0619
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a> 1.50 |   0.2667 |             No |       0.0278 |         0.0619
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a> 2.00 |   0.2667 |             No |       0.0167 |         0.0619
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a> 4.00 |   0.2667 |             No |       0.0167 |         0.0619
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a> 8.00 |   0.4000 |            Yes |       0.0000 |         0.1000
+</span></code></pre></div>
+<p>At <span class="arithmatex">\(s = 8\)</span>, the scaled weight (0.15 * 8 = 1.2) exceeds the original group maximum (0.8), so <span class="arithmatex">\(\Delta'\)</span> jumps from 0.2667 to 0.4. While the salient weight itself happens to land exactly on a grid point (error = 0), every non-salient weight in the group now quantizes with a coarser step size, and their average error jumps from 0.0619 to 0.1000.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In the paper, the authors found that at <span class="arithmatex">\(s = 2\)</span>, less than 5% of groups had a changed <span class="arithmatex">\(\Delta\)</span>, and the best perplexity appeared at <span class="arithmatex">\(s = 2\)</span>. At <span class="arithmatex">\(s = 4\)</span>, the ratio <span class="arithmatex">\(\Delta'/\Delta &gt; 1\)</span> for 21.2% of channels, which damages overall accuracy.</p>
+</div>
+<p>This is the fundamental tension in AWQ: scaling up salient weights helps them, but scaling too aggressively hurts everything else. The method needs to find the right balance.</p>
+<h3 id="searching-for-the-optimal-scale">Searching for the Optimal Scale<a class="headerlink" href="#searching-for-the-optimal-scale" title="Permanent link">&para;</a></h3>
+<p>Rather than picking a single scalar <span class="arithmatex">\(s\)</span>, AWQ searches for a per-input-channel scaling vector <span class="arithmatex">\(\mathbf{s}\)</span> that minimizes the layer-wise reconstruction error:</p>
+<div class="arithmatex">\[
+\mathbf{s}^* = \arg\min_{\mathbf{s}} \mathcal{L}(\mathbf{s})
+\]</div>
+<div class="arithmatex">\[
+\mathcal{L}(\mathbf{s}) = \| Q(\mathbf{W} \cdot \text{diag}(\mathbf{s}))(\text{diag}(\mathbf{s})^{-1} \cdot \mathbf{X}) - \mathbf{W}\mathbf{X} \|
+\]</div>
+<p>Here <span class="arithmatex">\(\mathbf{W}\)</span> is the weight matrix, <span class="arithmatex">\(\mathbf{X}\)</span> is the input from a small calibration set, and <span class="arithmatex">\(Q\)</span> is the quantization function.</p>
+<h4 id="the-search-space">The Search Space<a class="headerlink" href="#the-search-space" title="Permanent link">&para;</a></h4>
+<p>The key design choice is how to parameterize <span class="arithmatex">\(\mathbf{s}\)</span>. Since the saliency of weight channels is determined by the activation magnitudes (that is the <strong>activation-aware</strong> part), AWQ defines:</p>
+<div class="arithmatex">\[
+\mathbf{s} = \mathbf{s_x}^{\alpha}, \quad \alpha^* = \arg\min_{\alpha} \mathcal{L}(\mathbf{s_x}^{\alpha})
+\]</div>
+<p>where:</p>
+<ul>
+<li><span class="arithmatex">\(\mathbf{s_x}\)</span> is the average magnitude of activations per channel, computed from the calibration set</li>
+<li>
+<p><span class="arithmatex">\(\alpha \in [0, 1]\)</span> is a single hyperparameter that controls the balance</p>
+</li>
+<li>
+<p>When <span class="arithmatex">\(\alpha = 0\)</span>, there is no scaling (all channels treated equally). </p>
+</li>
+<li>
+<p>When <span class="arithmatex">\(\alpha = 1\)</span>, scaling is most aggressive (channels with large activations get the most protection). </p>
+</li>
+</ul>
+<p>The optimal <span class="arithmatex">\(\alpha\)</span> is found by a simple grid search over <span class="arithmatex">\([0, 1]\)</span>.</p>
+<p>This parameterization is deliberate. It means the search space has a single dimension (just <span class="arithmatex">\(\alpha\)</span>), making the grid search fast. In practice, the paper uses 20 grid points, so each layer requires only 20 forward passes through the quantization function.</p>
+<div class="admonition tip">
+<p class="admonition-title">Why not optimize s directly ?</p>
+<p>Optimizing each element of <span class="arithmatex">\(\mathbf{s}\)</span> independently via backpropagation would be time-consuming and complex to implement for a post-training method. The <span class="arithmatex">\(\alpha\)</span> parameterization collapses this to a 1D grid search, which is both fast and stable.</p>
+</div>
+<h4 id="implementation-detail">Implementation Detail<a class="headerlink" href="#implementation-detail" title="Permanent link">&para;</a></h4>
+<p>In practice, the implementation also incorporates a weight-based scaling component. Looking at the <a href="https://github.com/AyoubMDL/onnx_quantize/blob/main/src/onnx_quantize/pre_passes/awq.py">actual implementation</a>, the scale at each grid point is computed as:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">scale</span> <span class="o">=</span> <span class="n">act_scale</span> <span class="o">**</span> <span class="n">ratio</span> <span class="o">/</span> <span class="n">weight_scale</span> <span class="o">**</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">ratio</span><span class="p">)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">scale</span> <span class="o">=</span> <span class="n">scale</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">scale</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">scale</span><span class="p">))</span>
+</span></code></pre></div>
+<p>The <code>weight_scale</code> factor accounts for the relative magnitude of each weight channel within its group, and the normalization by the geometric mean prevents the scale from drifting too far from 1. The <code>ratio</code> here plays the role of <span class="arithmatex">\(\alpha\)</span>.</p>
+<h3 id="weight-clipping">Weight Clipping<a class="headerlink" href="#weight-clipping" title="Permanent link">&para;</a></h3>
+<p>AWQ also applies weight clipping to further reduce quantization error. This is a well-known technique in quantization: instead of using the full range <span class="arithmatex">\([\min(\mathbf{w}), \max(\mathbf{w})]\)</span> to determine <span class="arithmatex">\(\Delta\)</span>, you clip to a slightly narrower range. Clipping sacrifices the accuracy of outlier weights to improve the step size for everyone else.</p>
+<p>What AWQ does differently from standard clipping is to consider the activation when measuring the clipping error. Standard clipping minimizes <span class="arithmatex">\(\|Q(\mathbf{w}) - \mathbf{w}\|\)</span>, but AWQ minimizes <span class="arithmatex">\(\|Q(\mathbf{w})\mathbf{x} - \mathbf{w}\mathbf{x}\|\)</span>. This means channels with larger activations weigh more heavily in the clipping decision, consistent with the activation-aware philosophy of the whole method.</p>
+<p>The optimal clip ratio is found by another small grid search (10 steps in the implementation, searching over ratios from 1.0 down to 0.91).</p>
+<h3 id="why-awq-does-not-overfit">Why AWQ Does Not Overfit<a class="headerlink" href="#why-awq-does-not-overfit" title="Permanent link">&para;</a></h3>
+<p>One of AWQ's practical strengths is its minimal reliance on the calibration set. Unlike GPTQ (I'll be doing an in depth blog about it), which uses Hessian information from calibration data to perform error compensation column by column, AWQ only extracts one statistic from the calibration data: the average per-channel activation magnitude.</p>
+<p>This distinction matters:</p>
+<ul>
+<li>
+<p><strong>GPTQ</strong> reconstructs weights by solving a regression problem layer by layer. It fits the quantized weights to reproduce the exact outputs on the calibration data. This is powerful but can overfit: if the calibration distribution differs from the deployment distribution, the "corrections" GPTQ learned may hurt rather than help.</p>
+</li>
+<li>
+<p><strong>AWQ</strong> just measures the average channel magnitude. This is a coarse statistic that is stable across distributions. It needs as few as 16 sequences and its perplexity changes by only 0.5-0.6 points under distribution shift.</p>
+</li>
+</ul>
+<p>This is what the paper means by <strong>does not rely on any regression</strong>: AWQ does not solve a per-weight optimization problem. It does not use backpropagation. The scaling factors are derived from a simple grid search using a forward-only objective. The result is a method that generalizes well across domains, works on instruction-tuned models, and even extends to multi-modal LMs without modification.</p>
+<figure>
+  <img alt="AWQ calibration robustness" src="../assets/awq/calibration_robust.png" />
+<br />
+<figcaption>AWQ calibration robustness across different data distributions (from the <a href="https://arxiv.org/abs/2306.00978">AWQ paper</a>)</figcaption>
+</figure>
+<h3 id="results">Results<a class="headerlink" href="#results" title="Permanent link">&para;</a></h3>
+<p>AWQ consistently outperforms RTN (round-to-nearest) and matches or beats GPTQ across model families, sizes, and bit-widths.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>FP16</th>
+<th>RTN (INT3-g128)</th>
+<th>GPTQ (INT3-g128)</th>
+<th>AWQ (INT3-g128)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLaMA-7B</td>
+<td>5.68</td>
+<td>7.01</td>
+<td>6.53</td>
+<td><strong>6.35</strong></td>
+</tr>
+<tr>
+<td>LLaMA-13B</td>
+<td>5.09</td>
+<td>5.88</td>
+<td>5.64</td>
+<td><strong>5.52</strong></td>
+</tr>
+<tr>
+<td>LLaMA-30B</td>
+<td>4.10</td>
+<td>4.88</td>
+<td>4.74</td>
+<td><strong>4.61</strong></td>
+</tr>
+<tr>
+<td>LLaMA-65B</td>
+<td>3.53</td>
+<td>4.24</td>
+<td>4.21</td>
+<td><strong>3.95</strong></td>
+</tr>
+</tbody>
+</table>
+<p><em>WikiText-2 perplexity (lower is better). INT3 quantization with group size 128.</em></p>
+<p>Notably, AWQ also generalizes to instruction-tuned models (Vicuna) and multi-modal models (OpenFlamingo, VILA), where GPTQ's calibration-sensitive approach degrades more significantly.</p>
+<h2 id="implementation">Implementation<a class="headerlink" href="#implementation" title="Permanent link">&para;</a></h2>
+<h3 id="flow">Flow<a class="headerlink" href="#flow" title="Permanent link">&para;</a></h3>
+<figure>
+  <img alt="AWQ pipeline flow" src="../assets/awq/awq_flow.png" />
+<br />
+<figcaption>AWQ pipeline flow</figcaption>
+</figure>
+<p>The full AWQ pipeline works as follows:</p>
+<ol>
+<li>
+<p><strong>Collect activation statistics</strong>: Run a small calibration set through the model and record the average per-channel activation magnitude <span class="arithmatex">\(\mathbf{s_x}\)</span>.</p>
+</li>
+<li>
+<p><strong>Compute weight scales</strong>: For each weight group, compute a relative weight scale indicating how large each channel is relative to the group maximum.</p>
+</li>
+<li>
+<p><strong>Grid search for optimal <span class="arithmatex">\(\alpha\)</span></strong>: For each candidate <span class="arithmatex">\(\alpha\)</span> in a grid over <span class="arithmatex">\([0, 1]\)</span>:</p>
+<ul>
+<li>Compute the per-channel scaling vector <span class="arithmatex">\(\mathbf{s} = \mathbf{s_x}^{\alpha} / \mathbf{s_w}^{(1-\alpha)}\)</span></li>
+<li>Scale the weights: <span class="arithmatex">\(\mathbf{W'} = \mathbf{W} \cdot \text{diag}(\mathbf{s})\)</span></li>
+<li>Fake-quantize <span class="arithmatex">\(\mathbf{W'}\)</span> (quantize then dequantize)</li>
+<li>Unscale: <span class="arithmatex">\(\hat{\mathbf{W}} = Q(\mathbf{W'}) / \text{diag}(\mathbf{s})\)</span></li>
+<li>Measure MSE: <span class="arithmatex">\(\mathcal{L} = \|\hat{\mathbf{W}}\mathbf{X} - \mathbf{W}\mathbf{X}\|^2\)</span></li>
+<li>Track the best scale</li>
+</ul>
+</li>
+<li>
+<p><strong>Apply the best scale</strong>: Multiply the weights by <span class="arithmatex">\(\mathbf{s}^*\)</span> and insert a corresponding <span class="arithmatex">\(1/\mathbf{s}^*\)</span> multiplication on the input activations (which can be fused into the previous layer's operation).</p>
+</li>
+<li>
+<p><strong>(Optional) Clip search</strong>: Search for the optimal clipping ratio that minimizes activation-weighted reconstruction error.</p>
+</li>
+<li>
+<p><strong>Quantize</strong>: Apply standard round-to-nearest quantization to the scaled weights.</p>
+</li>
+</ol>
+<h3 id="code">Code<a class="headerlink" href="#code" title="Permanent link">&para;</a></h3>
+<p>I have implemented AWQ from scratch in <a href="https://github.com/AyoubMDL/onnx_quantize">onnx_quantize</a>, a Python package for ONNX model quantization.</p>
+<p>The core of the implementation is in <a href="https://github.com/AyoubMDL/onnx_quantize/blob/main/src/onnx_quantize/pre_passes/awq.py"><code>awq.py</code></a>. A lot of open source projects implement AWQ (such as vllm llm-compressor). Here's an example of quantizing Mistral-7b model:</p>
+<p><a href="https://colab.research.google.com/github/AyoubMDL/llm_inference_blog/blob/main/docs/blog/posts/assets/awq/awq_llm_compressor.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" /></a></p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Install compressed_tensors, llm-compressor, transformers</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">datasets</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_dataset</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">llmcompressor</span><span class="w"> </span><span class="kn">import</span> <span class="n">oneshot</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">llmcompressor.modifiers.awq</span><span class="w"> </span><span class="kn">import</span> <span class="n">AWQModifier</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">MODEL_ID</span> <span class="o">=</span> <span class="s2">&quot;mistralai/Mistral-7B-Instruct-v0.3&quot;</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="n">model</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">MODEL_ID</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">MODEL_ID</span><span class="p">,</span> <span class="n">trust_remote_code</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="c1"># Select calibration dataset.</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="n">DATASET_ID</span> <span class="o">=</span> <span class="s2">&quot;HuggingFaceH4/ultrachat_200k&quot;</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="n">DATASET_SPLIT</span> <span class="o">=</span> <span class="s2">&quot;train_sft&quot;</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="c1"># Select number of samples. 256 samples is a good place to start.</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="c1"># Increasing the number of samples can improve accuracy.</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="n">NUM_CALIBRATION_SAMPLES</span> <span class="o">=</span> <span class="mi">256</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="n">MAX_SEQUENCE_LENGTH</span> <span class="o">=</span> <span class="mi">512</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="c1"># Load dataset and preprocess.</span>
+</span><span id="__span-6-22"><a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">DATASET_ID</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">DATASET_SPLIT</span><span class="si">}</span><span class="s2">[:</span><span class="si">{</span><span class="n">NUM_CALIBRATION_SAMPLES</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">)</span>
+</span><span id="__span-6-23"><a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">seed</span><span class="o">=</span><span class="mi">42</span><span class="p">)</span>
+</span><span id="__span-6-24"><a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a>
+</span><span id="__span-6-25"><a id="__codelineno-6-25" name="__codelineno-6-25" href="#__codelineno-6-25"></a>
+</span><span id="__span-6-26"><a id="__codelineno-6-26" name="__codelineno-6-26" href="#__codelineno-6-26"></a><span class="k">def</span><span class="w"> </span><span class="nf">preprocess</span><span class="p">(</span><span class="n">example</span><span class="p">):</span>
+</span><span id="__span-6-27"><a id="__codelineno-6-27" name="__codelineno-6-27" href="#__codelineno-6-27"></a>    <span class="k">return</span> <span class="p">{</span>
+</span><span id="__span-6-28"><a id="__codelineno-6-28" name="__codelineno-6-28" href="#__codelineno-6-28"></a>        <span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
+</span><span id="__span-6-29"><a id="__codelineno-6-29" name="__codelineno-6-29" href="#__codelineno-6-29"></a>            <span class="n">example</span><span class="p">[</span><span class="s2">&quot;messages&quot;</span><span class="p">],</span>
+</span><span id="__span-6-30"><a id="__codelineno-6-30" name="__codelineno-6-30" href="#__codelineno-6-30"></a>            <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-6-31"><a id="__codelineno-6-31" name="__codelineno-6-31" href="#__codelineno-6-31"></a>        <span class="p">)</span>
+</span><span id="__span-6-32"><a id="__codelineno-6-32" name="__codelineno-6-32" href="#__codelineno-6-32"></a>    <span class="p">}</span>
+</span><span id="__span-6-33"><a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a>
+</span><span id="__span-6-34"><a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a>
+</span><span id="__span-6-35"><a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">map</span><span class="p">(</span><span class="n">preprocess</span><span class="p">)</span>
+</span><span id="__span-6-36"><a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a>
+</span><span id="__span-6-37"><a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="c1"># Tokenize inputs.</span>
+</span><span id="__span-6-38"><a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="k">def</span><span class="w"> </span><span class="nf">tokenize</span><span class="p">(</span><span class="n">sample</span><span class="p">):</span>
+</span><span id="__span-6-39"><a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a>    <span class="k">return</span> <span class="n">tokenizer</span><span class="p">(</span>
+</span><span id="__span-6-40"><a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a>        <span class="n">sample</span><span class="p">[</span><span class="s2">&quot;text&quot;</span><span class="p">],</span>
+</span><span id="__span-6-41"><a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a>        <span class="n">padding</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-6-42"><a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a>        <span class="n">max_length</span><span class="o">=</span><span class="n">MAX_SEQUENCE_LENGTH</span><span class="p">,</span>
+</span><span id="__span-6-43"><a id="__codelineno-6-43" name="__codelineno-6-43" href="#__codelineno-6-43"></a>        <span class="n">truncation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-6-44"><a id="__codelineno-6-44" name="__codelineno-6-44" href="#__codelineno-6-44"></a>        <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-6-45"><a id="__codelineno-6-45" name="__codelineno-6-45" href="#__codelineno-6-45"></a>    <span class="p">)</span>
+</span><span id="__span-6-46"><a id="__codelineno-6-46" name="__codelineno-6-46" href="#__codelineno-6-46"></a>
+</span><span id="__span-6-47"><a id="__codelineno-6-47" name="__codelineno-6-47" href="#__codelineno-6-47"></a><span class="c1"># Configure the quantization algorithm to run.</span>
+</span><span id="__span-6-48"><a id="__codelineno-6-48" name="__codelineno-6-48" href="#__codelineno-6-48"></a><span class="n">recipe</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-6-49"><a id="__codelineno-6-49" name="__codelineno-6-49" href="#__codelineno-6-49"></a>    <span class="n">AWQModifier</span><span class="p">(</span>
+</span><span id="__span-6-50"><a id="__codelineno-6-50" name="__codelineno-6-50" href="#__codelineno-6-50"></a>        <span class="n">ignore</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;lm_head&quot;</span><span class="p">],</span> <span class="n">scheme</span><span class="o">=</span><span class="s2">&quot;W4A16_ASYM&quot;</span><span class="p">,</span> <span class="n">targets</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;Linear&quot;</span><span class="p">]</span>
+</span><span id="__span-6-51"><a id="__codelineno-6-51" name="__codelineno-6-51" href="#__codelineno-6-51"></a>    <span class="p">),</span>
+</span><span id="__span-6-52"><a id="__codelineno-6-52" name="__codelineno-6-52" href="#__codelineno-6-52"></a><span class="p">]</span>
+</span><span id="__span-6-53"><a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a>
+</span><span id="__span-6-54"><a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="c1"># Apply AWQ.</span>
+</span><span id="__span-6-55"><a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="n">oneshot</span><span class="p">(</span>
+</span><span id="__span-6-56"><a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a>    <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+</span><span id="__span-6-57"><a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a>    <span class="n">dataset</span><span class="o">=</span><span class="n">ds</span><span class="p">,</span>
+</span><span id="__span-6-58"><a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a>    <span class="n">recipe</span><span class="o">=</span><span class="n">recipe</span><span class="p">,</span>
+</span><span id="__span-6-59"><a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a>    <span class="n">max_seq_length</span><span class="o">=</span><span class="n">MAX_SEQUENCE_LENGTH</span><span class="p">,</span>
+</span><span id="__span-6-60"><a id="__codelineno-6-60" name="__codelineno-6-60" href="#__codelineno-6-60"></a>    <span class="n">num_calibration_samples</span><span class="o">=</span><span class="n">NUM_CALIBRATION_SAMPLES</span><span class="p">,</span>
+</span><span id="__span-6-61"><a id="__codelineno-6-61" name="__codelineno-6-61" href="#__codelineno-6-61"></a><span class="p">)</span>
+</span><span id="__span-6-62"><a id="__codelineno-6-62" name="__codelineno-6-62" href="#__codelineno-6-62"></a>
+</span><span id="__span-6-63"><a id="__codelineno-6-63" name="__codelineno-6-63" href="#__codelineno-6-63"></a><span class="c1"># Save to disk compressed.</span>
+</span><span id="__span-6-64"><a id="__codelineno-6-64" name="__codelineno-6-64" href="#__codelineno-6-64"></a><span class="n">SAVE_DIR</span> <span class="o">=</span> <span class="n">MODEL_ID</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;/&quot;</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="s2">&quot;-awq-asym&quot;</span>
+</span><span id="__span-6-65"><a id="__codelineno-6-65" name="__codelineno-6-65" href="#__codelineno-6-65"></a><span class="n">model</span><span class="o">.</span><span class="n">save_pretrained</span><span class="p">(</span><span class="n">SAVE_DIR</span><span class="p">,</span> <span class="n">save_compressed</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="__span-6-66"><a id="__codelineno-6-66" name="__codelineno-6-66" href="#__codelineno-6-66"></a><span class="n">tokenizer</span><span class="o">.</span><span class="n">save_pretrained</span><span class="p">(</span><span class="n">SAVE_DIR</span><span class="p">)</span>
+</span></code></pre></div>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>AWQ's strength lies in its simplicity. The entire method rests on one observation (salient weights are identified by activations) and one trick (scaling before quantization reduces error for scaled channels). There is no gradient computation, no Hessian, no regression. Just a 1D grid search per layer.</p>
+<p>This simplicity translates to practical benefits: fast quantization, small calibration sets, robustness to distribution shift, and easy application to new model families including multi-modal architectures.</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://arxiv.org/abs/2306.00978">AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration</a> - Lin et al., MLSys 2024 (Best Paper Award)</li>
+<li><a href="https://github.com/vllm-project/llm-compressor/tree/main">llmcompressor</a></li>
+<li><a href="https://github.com/AyoubMDL/onnx_quantize/blob/main/src/onnx_quantize/pre_passes/awq.py">onnx_quantize: AWQ implementation</a></li>
+</ul>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+  
+
+
+
+<h2 id="__comments">Comments</h2>
+
+<script src="https://giscus.app/client.js"
+        data-repo="AyoubMDL/llm_inference_blog"
+        data-repo-id="R_kgDORmARPg"
+        data-category="Q&A"
+        data-category-id="DIC_kwDORmARPs4C4cC4"
+        data-mapping="pathname"
+        data-strict="1"
+        data-reactions-enabled="1"
+        data-emit-metadata="0"
+        data-input-position="bottom"
+        data-theme="preferred_color_scheme"
+        data-lang="en"
+        data-loading="lazy"
+        crossorigin="anonymous"
+        async>
+</script>
+
+      
+    </article>
+  </div>
+
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/AyoubMDL" target="_blank" rel="noopener" title="GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://www.linkedin.com/in/ayoub-bih/" target="_blank" rel="noopener" title="LinkedIn" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M416 32H31.9C14.3 32 0 46.5 0 64.3v383.4C0 465.5 14.3 480 31.9 480H416c17.6 0 32-14.5 32-32.3V64.3c0-17.8-14.4-32.3-32-32.3M135.4 416H69V202.2h66.5V416zM102.2 96a38.5 38.5 0 1 1 0 77 38.5 38.5 0 1 1 0-77m282.1 320h-66.4V312c0-24.8-.5-56.7-34.5-56.7-34.6 0-39.9 27-39.9 54.9V416h-66.4V202.2h63.7v29.2h.9c8.9-16.8 30.6-34.5 62.9-34.5 67.2 0 79.7 44.3 79.7 101.9z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.tabs", "navigation.top", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "toc.integrate"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="../../javascripts/external-links.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
